@@ -1,0 +1,175 @@
+
+```{r}
+library(tidyr)
+library(sqldf)
+options(sqldf.driver = "SQLite")
+library(dplyr)
+print(getwd())
+#setwd("Documents/DBMS-Workspace/Practicum1")
+file_csv <- 'BirdStrikesData.csv'
+
+df1 <- read.csv(file_csv)
+
+df1
+df2 <- separate_rows(df1, Conditions..Precipitation)
+
+```
+
+```{r}
+# 1. Library (must be installed prior to loading
+library(RMySQL)     ### MySQL
+
+#2. CSV File Name:
+file_csv <- '/home/yashk/Documents/DBMS-Workspace/Practicum1'
+
+# 4. Settings
+db_user <- 'root'
+db_password <- 'Password@123'
+db_name <- 'practicum1'
+
+# Local: localhost
+db_host <- 'localhost' 
+db_port <- 3306 # always this port unless you change it during installation
+
+# 4. Connect to DB
+mydb <-  dbConnect(MySQL(), user = db_user, password = db_password,
+                dbname = db_name, host = db_host, port = db_port)
+dbListTables(mydb)
+```
+
+Inserting into precipitation_types table
+```{r}
+#To send Local Variables we write the below statement
+dbSendQuery(mydb, "SET GLOBAL local_infile = true;")
+
+precipitation_types <- sqldf('SELECT DISTINCT "Conditions..Precipitation" AS Precipitation_Type FROM df1 WHERE Precipitation_Type NOT LIKE "%,%"')
+precipitation_types
+dbWriteTable(mydb, name = "precipitation_type", value= precipitation_types, append = TRUE,row.names=FALSE)
+```
+
+```{sql connection=mydb}
+SELECT * FROM precipitation_type
+```
+
+Inserting into wildlife table
+```{r}
+wildlife <- sqldf('SELECT DISTINCT "Wildlife..Species" AS Species, "Wildlife..Size" AS Size FROM df1')
+#wildlife$WildlifeID <- 1:395
+wildlife
+dbWriteTable(mydb, name = "wildlife", value= wildlife, append = TRUE,row.names=FALSE)
+
+```
+
+```{sql connection=mydb}
+SELECT * FROM wildlife
+
+```
+
+
+Inserting into airport table
+```{r}
+airport <- sqldf('SELECT DISTINCT "Airport..Name" AS NAME, "Origin.State" AS State FROM df1')
+airport
+#airport$AirportID<- 1:1141
+dbWriteTable(mydb, name = "airport", value= airport, append = TRUE,row.names=FALSE)
+
+```
+
+```{sql connection=mydb}
+SELECT * FROM airport
+
+```
+
+Inserting into airpline_operator
+```{r}
+airline_operator <- sqldf('SELECT DISTINCT "Aircraft..Airline.Operator" AS AirlineOperator FROM df1')
+airline_operator
+#airline_operator$AirlineOperatorID <- 1:293
+dbWriteTable(mydb, name = "airline_operator", value= airline_operator, append = TRUE,row.names=FALSE)
+
+```
+
+```{sql connection=mydb}
+SELECT * FROM airline_operator
+
+```
+
+
+Inserting into aircraft
+```{r}
+aircraft <- sqldf('SELECT DISTINCT "Aircraft..Make.Model" AS Make_Model, "Aircraft..Type" AS Type, "Is.Aircraft.Large." AS IsAircraftLarge  FROM df1')
+aircraft[aircraft$IsAircraftLarge == "Yes",]$IsAircraftLarge <- 1
+aircraft[aircraft$IsAircraftLarge == "No",]$IsAircraftLarge <- 0
+aircraft
+#aircraft$AircraftTypeID<- 1:354
+aircraft$IsAircraftLarge<- as.integer(aircraft$IsAircraftLarge)
+dbWriteTable(mydb, name = "aircraft", value= aircraft, append = TRUE,row.names=FALSE, overwrite = FALSE)
+```
+
+```{sql connection=mydb}
+SELECT * FROM aircraft
+
+```
+
+
+handled FOREIGN KEY constraint for aiportID 
+```{r}
+cname <- c("Record.ID", "FlightDate", "Wildlife..Number.struck", "Wildlife..Number.Struck.Actual", "Effect..Impact.to.flight", "Altitude.bin", "Effect..Indicated.Damage", "When..Phase.of.flight", "Remains.of.wildlife.collected.", "Remains.of.wildlife.sent.to.Smithsonian", "Remarks", "Conditions..Sky", "Pilot.warned.of.birds.or.wildlife.", "Cost..Total..", "Feet.above.ground", "Number.of.people.injured")
+bird_strike_incident <- df1 %>% select(cname)
+
+bird_strike_incident$AirportID=0
+x<-sqldf("SELECT DISTINCT `Record.ID`, AirportID FROM df1 LEFT JOIN airport ON df1.'Airport..Name' = airport.Name AND df1.`Origin.State` = airport.State ")
+bird_strike_incident[bird_strike_incident$Record.ID == x$Record.ID, ]$AirportID<-x[bird_strike_incident$Record.ID == x$Record.ID,]$AirportID
+data.frame(bird_strike_incident$Record.ID ,bird_strike_incident$AirportID)
+```
+
+handled FOREIGN KEY for Wildlife
+```{r}
+bird_strike_incident$WildlifeID<- 0
+x<-sqldf("SELECT DISTINCT df1.'Record.ID',WildlifeID FROM df1 INNER JOIN wildlife ON df1.'Wildlife..Species'= wildlife.Species AND df1.'Wildlife..Size' = wildlife.Size")
+x
+bird_strike_incident[bird_strike_incident$Record.ID == x$Record.ID,]$WildlifeID <- x[bird_strike_incident$Record.ID == x$Record.ID,]$WildlifeID
+data.frame(bird_strike_incident$Record.ID ,bird_strike_incident$WildlifeID)
+```
+
+
+handled Precipitation
+```{r}
+colnames(df2)
+precipitation_type <- dbGetQuery(mydb, "SELECT * FROM `precipitation_type`")
+precipitation_type
+colnames(precipitation_type)
+precipitation <- sqldf("SELECT df2.`Record.ID`, PrecipitationID FROM df2 INNER JOIN precipitation_type ON df2.'Conditions..Precipitation'= precipitation_type.Precipitation_Type")
+precipitation
+```
+
+handled Precipitation
+```{r}
+aircraft <- dbGetQuery(mydb, "SELECT * FROM `aircraft`")
+colnames(aircraft)
+airline_operator <- dbGetQuery(mydb, "SELECT * FROM `airline_operator`")
+airline_aircrafts <- sqldf("SELECT DISTINCT aircraft.AircraftTypeID, airline_operator.airlineOperatorID, df1.`Aircraft..Number.of.engines.` AS `NumberOfEngines` 
+                           FROM aircraft INNER JOIN airline_operator INNER JOIN df1
+                           ON aircraft.`Make_Model` = df1.`Aircraft..Make.Model` AND 
+                           airline_operator.AirlineOperator = df1.`Aircraft..Airline.Operator`")
+airline_aircrafts
+dbWriteTable(mydb, name = "airline_aircrafts", value= airline_aircrafts, append = TRUE,row.names=FALSE, overwrite = FALSE)
+```
+```{sql connection=mydb}
+SELECT * FROM airline_aircrafts
+```
+
+```{r}
+print(colnames(df1))
+```
+
+```{r}
+dbDisconnect(mydb)
+```
+
+
+
+
+
+
+

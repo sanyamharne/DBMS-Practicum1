@@ -1,0 +1,41 @@
+---
+title: "Trial NpteBook"
+output: html_notebook
+---
+
+```{r}
+setwd("/Users/sanyamharne/Desktop/Practicum1")
+```
+
+```{r}
+# Read in the data
+df1 <- read.csv("BirdStrikesData.csv")
+head(df1)
+```
+
+```{r}
+# 1. Library (must be installed prior to loading
+library(RMySQL)     ### MySQL
+
+#2. CSV File Name:
+file_csv <- '/Users/sanyamharne/Desktop/Practicum1/'
+
+# 4. Settings
+db_user <- 'root'
+db_password <- 'Sanyam@123'
+db_name <- 'practicum1'
+
+# Local: localhost
+db_host <- 'localhost' 
+db_port <- 3306 # always this port unless you change it during installation
+
+# 4. Connect to DB
+mydb <-  dbConnect(MySQL(), user = db_user, password = db_password,
+                dbname = db_name, host = db_host, port = db_port)
+dbListTables(mydb)
+```
+
+```{r}
+
+```
+
